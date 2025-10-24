@@ -11,7 +11,9 @@ frontend, and extensible node-based workflow engine.
 
 ## General Guidelines
 
-- Always use pnpm
+- **Always use pnpm** (version 10.18.3 or newer)
+- **Node.js requirement**: Version 22.16 or newer
+- Use `corepack enable` to manage pnpm versions correctly
 - We use Linear as a ticket tracking system
 - We use Posthog for feature flags
 - When starting to work on a new ticket – create a new branch from fresh
@@ -34,6 +36,18 @@ You can inspect the last few lines of the build log file to check for errors:
 ```bash
 tail -n 20 build.log
 ```
+
+### Development
+- `pnpm dev` - Start all packages in development mode with hot reload
+- `pnpm dev:be` - Backend-only development (excludes frontend packages)
+- `pnpm dev:fe` - Frontend-only development (runs backend server + editor-ui dev server)
+- `pnpm dev:ai` - AI/LangChain nodes development
+- `pnpm start` - Start n8n in production mode
+- `N8N_DEV_RELOAD=true pnpm dev` - Enable hot reload for custom nodes/credentials
+
+**Performance tip:** Running all packages in dev mode is resource-intensive. Use
+filtered commands (`dev:be`, `dev:fe`, `dev:ai`) to run only relevant packages
+for better performance.
 
 ### Testing
 - `pnpm test` - Run all tests
@@ -67,16 +81,24 @@ build the system before running lint and typecheck.
 
 The monorepo is organized into these key packages:
 
+Backend packages:
 - **`packages/@n8n/api-types`**: Shared TypeScript interfaces between frontend and backend
 - **`packages/workflow`**: Core workflow interfaces and types
 - **`packages/core`**: Workflow execution engine
 - **`packages/cli`**: Express server, REST API, and CLI commands
-- **`packages/editor-ui`**: Vue 3 frontend application
-- **`packages/@n8n/i18n`**: Internationalization for UI text
 - **`packages/nodes-base`**: Built-in nodes for integrations
 - **`packages/@n8n/nodes-langchain`**: AI/LangChain nodes
-- **`@n8n/design-system`**: Vue component library for UI consistency
-- **`@n8n/config`**: Centralized configuration management
+- **`packages/@n8n/config`**: Centralized configuration management
+- **`packages/@n8n/di`**: Dependency injection container
+- **`packages/@n8n/errors`**: Error classes and handling
+
+Frontend packages:
+- **`packages/frontend/editor-ui`**: Vue 3 frontend application (main editor)
+- **`packages/frontend/@n8n/design-system`**: Vue component library for UI consistency
+- **`packages/frontend/@n8n/i18n`**: Internationalization for UI text
+- **`packages/frontend/@n8n/stores`**: Pinia stores for state management
+- **`packages/frontend/@n8n/rest-api-client`**: API client for backend communication
+- **`packages/frontend/@n8n/composables`**: Reusable Vue composition functions
 
 ## Technology Stack
 
@@ -99,11 +121,17 @@ The monorepo is organized into these key packages:
 
 ## Key Development Patterns
 
-- Each package has isolated build configuration and can be developed independently
-- Hot reload works across the full stack during development
-- Node development uses dedicated `node-dev` CLI tool
-- Workflow tests are JSON-based for integration testing
-- AI features have dedicated development workflow (`pnpm dev:ai`)
+- **Turbo Build Orchestration**: Uses Turbo to manage build dependencies and caching
+  - Build tasks automatically handle dependencies (e.g., `^build` means "build dependencies first")
+  - Turbo caches build outputs for faster rebuilds
+  - Most commands support `--filter` to target specific packages
+- **Package Isolation**: Each package has isolated build configuration and can be developed independently
+- **Hot Reload**: Works across the full stack during development
+  - Use `N8N_DEV_RELOAD=true` for automatic node/credential reloading
+  - File watching can be resource-intensive on slower machines
+- **Node Development**: Uses dedicated `node-dev` CLI tool for creating custom nodes
+- **JSON-Based Workflow Tests**: Integration tests for nodes use JSON workflow definitions
+- **Selective Development**: Use filtered dev commands for better performance on resource-constrained machines
 
 ### TypeScript Best Practices
 - **NEVER use `any` type** - use proper types or `unknown`
@@ -140,14 +168,31 @@ What we use for testing and writing tests:
 
 ### Common Development Tasks
 
-When implementing features:
+When implementing full-stack features:
 1. Define API types in `packages/@n8n/api-types`
-2. Implement backend logic in `packages/cli` module, follow
-   `@packages/cli/scripts/backend-module/backend-module.guide.md`
-3. Add API endpoints via controllers
-4. Update frontend in `packages/editor-ui` with i18n support
-5. Write tests with proper mocks
-6. Run `pnpm typecheck` to verify types
+2. Implement backend logic in `packages/cli`:
+   - Use dependency injection (`@n8n/di`) for services
+   - Follow Controller-Service-Repository pattern
+   - Use appropriate error classes from `@n8n/errors`
+3. Add API endpoints via controllers (REST API follows Express conventions)
+4. Update frontend in `packages/frontend/editor-ui`:
+   - Add UI text to `@n8n/i18n` package (never hardcode text)
+   - Use components from `@n8n/design-system` when possible
+   - Update Pinia stores in `@n8n/stores` for state management
+   - Use CSS variables from design system (see `packages/frontend/CLAUDE.md`)
+5. Write tests with proper mocks:
+   - Backend: Jest with `nock` for HTTP mocking
+   - Frontend: Vitest
+   - E2E: Playwright (Cypress is being phased out)
+6. Build and run typechecks:
+   - `pnpm build` (if you changed types/interfaces)
+   - `pnpm typecheck` to verify types
+
+When implementing new nodes:
+1. Use `pnpm --filter @n8n/node-cli create` to scaffold
+2. Implement node logic in `packages/nodes-base/nodes/`
+3. Add workflow tests as JSON files
+4. Enable hot reload with `N8N_DEV_RELOAD=true pnpm dev`
 
 ## Github Guidelines
 - When creating a PR, use the conventions in
